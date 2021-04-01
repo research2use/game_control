@@ -28,7 +28,7 @@ class Limiter:
         Returns:
             float: duration in seconds based on requested fps
         """
-        if isinstance(self._fps, int):
+        if isinstance(self._fps, (float, int)):
             fps = self._fps
         else:
             fps = random.uniform(self._fps[0], self._fps[1])
