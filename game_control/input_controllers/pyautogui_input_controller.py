@@ -2,8 +2,7 @@ import time
 
 import pyautogui
 
-from game_control.input_controller import (InputController, KeyboardKey,
-                                           MouseButton)
+from game_control.input_controller import InputController, KeyboardKey, MouseButton
 from game_control.sprite_locator import SpriteLocator
 
 keyboard_key_mapping = {
@@ -81,7 +80,7 @@ keyboard_key_mapping = {
     KeyboardKey.KEY_J.name: "j",
     KeyboardKey.KEY_K.name: "k",
     KeyboardKey.KEY_L.name: "l",
-    KeyboardKey.KEY_SEMICOLON.name: ';',
+    KeyboardKey.KEY_SEMICOLON.name: ";",
     KeyboardKey.KEY_APOSTROPHE.name: "'",
     KeyboardKey.KEY_RETURN.name: "enter",
     KeyboardKey.KEY_ENTER.name: "enter",
@@ -133,7 +132,6 @@ mouse_button_mapping = {
 
 
 class PyAutoGUIInputController(InputController):
-
     def __init__(self, game=None, **kwargs):
         self.game = game
 
@@ -197,8 +195,11 @@ class PyAutoGUIInputController(InputController):
     # Mouse Actions
     def move(self, x=None, y=None, duration=0.25, absolute=True, **kwargs):
         if ("force" in kwargs and kwargs["force"] is True) or self.is_focused:
-            x += self.game.window_geometry["x_offset"]
-            y += self.game.window_geometry["y_offset"]
+            geometry = self.game._window_controller.get_window_geometry(
+                self.game._window_id
+            )
+            x += geometry["left"]
+            y += geometry["top"]
 
             if absolute:
                 pyautogui.moveTo(x=x, y=y, duration=duration)
@@ -219,12 +220,10 @@ class PyAutoGUIInputController(InputController):
             time.sleep(duration)
             self.click_up(button=button, **kwargs)
 
-    def click_screen_region(self, button=MouseButton.LEFT, screen_region=None, **kwargs):
+    def click_screen_region(self, region, button=MouseButton.LEFT, **kwargs):
         if ("force" in kwargs and kwargs["force"] is True) or self.is_focused:
-            screen_region_coordinates = self.game.screen_regions.get(screen_region)
-
-            x = (screen_region_coordinates[1] + screen_region_coordinates[3]) // 2
-            y = (screen_region_coordinates[0] + screen_region_coordinates[2]) // 2
+            x = (region[1] + region[3]) // 2
+            y = (region[0] + region[2]) // 2
 
             self.move(x=x, y=y)
             self.click(button=button, **kwargs)
@@ -245,7 +244,15 @@ class PyAutoGUIInputController(InputController):
             return True
 
     # Requires the Serpent OCR module
-    def click_string(self, query_string, button=MouseButton.LEFT, frame=None, fuzziness=2, ocr_preset=None, **kwargs):
+    def click_string(
+        self,
+        query_string,
+        button=MouseButton.LEFT,
+        frame=None,
+        fuzziness=2,
+        ocr_preset=None,
+        **kwargs
+    ):
         import serpent.ocr
 
         if ("force" in kwargs and kwargs["force"] is True) or self.is_focused:
@@ -255,7 +262,7 @@ class PyAutoGUIInputController(InputController):
                 fuzziness=fuzziness,
                 ocr_preset=ocr_preset,
                 offset_x=frame.offset_x,
-                offset_y=frame.offset_y
+                offset_y=frame.offset_y,
             )
 
             if string_location is not None:
@@ -269,17 +276,37 @@ class PyAutoGUIInputController(InputController):
 
             return False
 
-    def drag(self, button=MouseButton.LEFT, x0=None, y0=None, x1=None, y1=None, duration=0.25, **kwargs):
+    def drag(
+        self,
+        button=MouseButton.LEFT,
+        x0=None,
+        y0=None,
+        x1=None,
+        y1=None,
+        duration=0.25,
+        **kwargs
+    ):
         if ("force" in kwargs and kwargs["force"] is True) or self.is_focused:
             self.move(x=x0, y=y0)
             self.click_down(button=button, **kwargs)
             self.move(x=x1, y=y1, duration=duration)
             self.click_up(button=button, **kwargs)
 
-    def drag_screen_region_to_screen_region(self, button=MouseButton.LEFT, start_screen_region=None, end_screen_region=None, duration=1, **kwargs):
+    def drag_screen_region_to_screen_region(
+        self,
+        button=MouseButton.LEFT,
+        start_screen_region=None,
+        end_screen_region=None,
+        duration=1,
+        **kwargs
+    ):
         if ("force" in kwargs and kwargs["force"] is True) or self.is_focused:
-            start_screen_region_coordinates = self._extract_screen_region_coordinates(start_screen_region)
-            end_screen_region_coordinates = self._extract_screen_region_coordinates(end_screen_region)
+            start_screen_region_coordinates = self._extract_screen_region_coordinates(
+                start_screen_region
+            )
+            end_screen_region_coordinates = self._extract_screen_region_coordinates(
+                end_screen_region
+            )
 
             self.drag(
                 button=button,

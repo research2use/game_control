@@ -10,7 +10,7 @@ class Limiter:
         """Construct limiter
 
         Args:
-            fps (int/tuple): Requested number of processing steps per second.
+            fps (number/tuple): Requested number of processing steps per second.
                 Will pause between start() and stop_and_delay() to reach fps.
                 Requested fps can be an int or a tuple (indicating a random
                 range to choose from).

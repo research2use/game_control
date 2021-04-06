@@ -1,8 +1,15 @@
 import time
 from abc import ABC, abstractmethod
+from datetime import datetime
+from pathlib import Path
+
+import cv2
+import numpy as np
 
 from game_control.frame_grabber import FrameGrabber
 from game_control.input_controller import InputController
+from game_control.limiter import Limiter
+from game_control.sprite import Sprite
 from game_control.window_controller import WindowController
 
 """
@@ -27,6 +34,9 @@ class Game(ABC):
         * and one for starting a game in a web browser via an url
 
     """
+
+    DATA_DIR = Path("data")
+    SPRITE_DIR = Path("sprites")
 
     def __init__(
         self,
@@ -62,14 +72,11 @@ class Game(ABC):
         self._window_controller = WindowController()
         self._input_controller = InputController(game=self)
         self.start(**kwargs)
-        if window_name:
-            self._window_name = window_name
-        else:
-            print(f"Waiting {wait_for_focus} seconds for game to start and get focus")
-            time.sleep(wait_for_focus)
-            self._window_name = self._window_controller.get_focused_window_name()
-        print("Window name of game =", self._window_name)
-        self._window_id = self._initialize_window()
+        self._set_window_name(window_name, wait_for_focus)
+        self._set_window_id()
+        self._initialize_window()
+
+        self.sprites = {}
 
     @abstractmethod
     def start(self):
@@ -94,43 +101,68 @@ class Game(ABC):
         """InputController: object to send keyboard and mouse commands to the game."""
         return self._input_controller
 
+    def _set_window_name(self, window_name, wait_for_focus):
+        """Sets name of the window to given name
+        or uses the name of the focused window when given name is None.
+        POST: self._set_window_name is set.
+
+        Args:
+            window_name (string/None): name of window; None when needs to be fetched.
+            wait_for_focus (number): seconds to wait before name is fetched from focused window.
+        """
+        if window_name is not None:
+            self._window_name = window_name
+        else:
+            print(f"Waiting {wait_for_focus} seconds for game to start and get focus")
+            time.sleep(wait_for_focus)
+            self._window_name = self._window_controller.get_focused_window_name()
+
     def _get_window_id(self):
-        """Tries to fetch id of the window from its name.
+        """Tries to fetch id of the window using its name.
+        PRE: self._window_name is set.
 
         Returns:
             int/None: Id of the window if it can be fetched; None otherwise.
         """
+        assert self._window_name is not None
         window_id = self._window_controller.locate_window(self._window_name)
         return None if window_id in [0, "0"] else window_id
 
-    def _initialize_window(self):
-        """Tries to focus the game window and move/resize it to its intial position.
-
-        Returns:
-            int: Id of the window if it can be fetched; None otherwise.
+    def _set_window_id(
+        self,
+        seconds_to_try=15,
+        tries_per_second=1,
+    ):
+        """Tries to set the id of the window.
+        POST: self._window_id is set.
 
         Raises:
             RuntimeError: when window could not be found.
         """
-        max_attempts = 100
-        window_id = None
-        for _ in range(max_attempts):
-            window_id = self._get_window_id()
-            if window_id:
+        self._window_id = None
+        started_at = datetime.utcnow()
+        limiter = Limiter(fps=tries_per_second)
+        while (datetime.utcnow() - started_at).total_seconds() < seconds_to_try:
+            limiter.start()
+            self._window_id = self._get_window_id()
+            if self._window_id:
                 break
-            time.sleep(0.1)
-        time.sleep(3)
+            limiter.stop_and_delay()
 
-        if not window_id:
+        if self._window_id is None:
             raise RuntimeError("Could not find window...")
 
-        self._window_controller.move_window(window_id, 0, 0)
-        self._window_controller.focus_window(window_id)
+    def _initialize_window(self):
+        """Tries to focus the game window and move/resize it to its intial position.
+        PRE: self._window_id and self._initial_window_region is set.
+        """
+        assert self._window_id is not None
+        assert self._initial_window_region is not None
+        self._window_controller.move_window(self._window_id, 0, 0)
+        self._window_controller.focus_window(self._window_id)
         self._window_controller.set_window_geometry(
-            window_id, self._initial_window_region
+            self._window_id, self._initial_window_region
         )
-
-        return window_id
 
     def is_launched(self):
         """bool: True when game was launched succesully; False otherwise."""
@@ -153,3 +185,53 @@ class Game(ABC):
             region = self._window_controller.get_window_geometry(self._window_id)
             frame = self._frame_grabber.grab_frame(region)
         return frame
+
+    def _wait_for_sprite(
+        self,
+        sprite,
+        region=None,
+        use_global_location=True,
+        msg=None,
+        seconds_to_try=15,
+        tries_per_second=1,
+    ):
+        """
+        Waits for the sprite to appear within the defined (roi of) frame.
+
+        Args:
+            sprite (Sprite): The sprite to find.
+            region (tuple/None): Only search within this region of the frame.
+            use_global_location (bool): if using a region, whether to return
+                global location or local to region.
+            msg (string/None): print this message while waiting
+            seconds_to_try (number): Number of seconds to wait for sprite to appear.
+            tries_per_second (number): Number of times per second to try and locate the sprite.
+
+        Returns:
+            bool: True when sprite appeared and was found in time;
+                False otherwise.
+            Frame: Last frame where sprite was searched in;
+                None when no valid frame could be grabbed.
+            tuple: Location of the sprite in frame when it was found;
+                None otherwise.
+        """
+
+        frame = None
+        location = None
+        started_at = datetime.utcnow()
+        limiter = Limiter(fps=tries_per_second)
+        while (datetime.utcnow() - started_at).total_seconds() < seconds_to_try:
+            limiter.start()
+            frame = self.grab_frame()
+            if frame is not None:
+                if msg is not None:
+                    print(msg)
+                location = Sprite.locate(
+                    sprite, frame, region, use_global_location=use_global_location
+                )
+                if location is not None:
+                    break
+            limiter.stop_and_delay()
+
+        found = location is not None
+        return found, frame, location

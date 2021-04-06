@@ -5,13 +5,13 @@ class Frame:
 
     """
 
-    def __init__(self, frame, timestamp=None):
+    def __init__(self, img, timestamp=None):
         """Construct frame and fill with given arguments.
 
         Args:
-            frame (np.ndarray): array with pixel values.
+            img (np.ndarray): array with pixel values.
             timestamp (datetime): date and time of creation.
 
         """
-        self.img = frame
+        self.img = img
         self.timestamp = timestamp
