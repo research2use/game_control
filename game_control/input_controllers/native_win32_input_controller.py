@@ -5,10 +5,13 @@ import numpy as np
 import scipy.interpolate
 import win32api
 
-from game_control.input_controller import (InputController, KeyboardKey,
-                                           MouseButton,
-                                           character_keyboard_key_mapping)
-from game_control.sprite_locator import SpriteLocator
+from game_control.input_controller import (
+    InputController,
+    KeyboardKey,
+    MouseButton,
+    character_keyboard_key_mapping,
+)
+from game_control.sprite import Sprite
 
 # Adding 1024 to extended keys to be able to detect the need to use a flag later on
 keyboard_key_mapping = {
@@ -187,8 +190,6 @@ class NativeWin32InputController(InputController):
 
         self.previous_key_collection_set = set()
 
-        self.sprite_locator = SpriteLocator()
-
     # Keyboard Actions
     def handle_keys(self, key_collection, **kwargs):
         key_collection_set = set(key_collection)
@@ -276,8 +277,11 @@ class NativeWin32InputController(InputController):
     ):
         if ("force" in kwargs and kwargs["force"] is True) or self.is_focused:
             if absolute:
-                x += self.game.window_geometry["x_offset"]
-                y += self.game.window_geometry["y_offset"]
+                geometry = self.game._window_controller.get_window_geometry(
+                    self.game._window_id
+                )
+                x += geometry["left"]
+                y += geometry["top"]
 
                 current_pixel_coordinates = win32api.GetCursorPos()
                 start_coordinates = self._to_windows_coordinates(
@@ -356,21 +360,19 @@ class NativeWin32InputController(InputController):
             time.sleep(duration)
             self.click_up(button=button, **kwargs)
 
-    def click_screen_region(
-        self, button=MouseButton.LEFT, screen_region=None, **kwargs
-    ):
+    def click_screen_region(self, region, button=MouseButton.LEFT, **kwargs):
         if ("force" in kwargs and kwargs["force"] is True) or self.is_focused:
-            screen_region_coordinates = self.game.screen_regions.get(screen_region)
-
-            x = (screen_region_coordinates[1] + screen_region_coordinates[3]) // 2
-            y = (screen_region_coordinates[0] + screen_region_coordinates[2]) // 2
+            x = (region[1] + region[3]) // 2
+            y = (region[0] + region[2]) // 2
 
             self.move(x, y)
             self.click(button=button, **kwargs)
 
-    def click_sprite(self, button=MouseButton.LEFT, sprite=None, frame=None, **kwargs):
+    def click_sprite(
+        self, button=MouseButton.LEFT, sprite=None, frame=None, region=None, **kwargs
+    ):
         if ("force" in kwargs and kwargs["force"] is True) or self.is_focused:
-            sprite_location = self.sprite_locator.locate(sprite=sprite, frame=frame)
+            sprite_location = Sprite.locate(sprite=sprite, frame=frame, region=region)
 
             if sprite_location is None:
                 return False

@@ -115,6 +115,15 @@ class InputControllerError(BaseException):
     pass
 
 
+"""
+TODO:
+Refactor by pushing game dependency out of backends and
+moving generic parts to this base InputController.
+Perhaps also make another wrapper that takse game geometry into account.
+
+"""
+
+
 class InputController:
     def __init__(self, backend=InputControllers.NATIVE_WIN32, game=None, **kwargs):
         self.game = game
@@ -174,18 +183,16 @@ class InputController:
         self._is_game_launched()
         self.backend.click(button=button, duration=duration, **kwargs)
 
-    def click_screen_region(
-        self, button=MouseButton.LEFT, screen_region=None, **kwargs
+    def click_screen_region(self, region, button=MouseButton.LEFT, **kwargs):
+        self._is_game_launched()
+        self.backend.click_screen_region(region, button=button, **kwargs)
+
+    def click_sprite(
+        self, button=MouseButton.LEFT, sprite=None, frame=None, region=None, **kwargs
     ):
         self._is_game_launched()
-        self.backend.click_screen_region(
-            button=button, screen_region=screen_region, **kwargs
-        )
-
-    def click_sprite(self, button=MouseButton.LEFT, sprite=None, frame=None, **kwargs):
-        self._is_game_launched()
         return self.backend.click_sprite(
-            button=button, sprite=sprite, frame=frame, **kwargs
+            button=button, sprite=sprite, frame=frame, region=region, **kwargs
         )
 
     # Requires the Serpent OCR module
@@ -245,16 +252,16 @@ class InputController:
         self.backend.scroll(clicks=clicks, direction=direction, **kwargs)
 
     def ratios_to_coordinates(self, ratios, screen_region=None):
-        window_offset_x = self.game.window_geometry["x_offset"]
-        window_offset_y = self.game.window_geometry["y_offset"]
+        window_offset_x = self.game._initial_window_region["left"]
+        window_offset_y = self.game._initial_window_region["top"]
 
         if screen_region is None:
-            width = self.game.window_geometry["width"]
-            height = self.game.window_geometry["height"]
+            width = self.game._initial_window_region["width"]
+            height = self.game._initial_window_region["height"]
 
             y0, x0, y1, x1 = (0, 0, height, width)
         else:
-            y0, x0, y1, x1 = self.game.screen_regions[screen_region]
+            y0, x0, y1, x1 = self.game.regions[screen_region]
 
             width = x1 - x0
             height = y1 - y0
@@ -287,13 +294,13 @@ class InputController:
             )
 
     def _extract_screen_region_coordinates(self, screen_region):
-        screen_region_coordinates = self.game.screen_regions.get(screen_region)
+        screen_region_coordinates = self.game.regions.get(screen_region)
 
         x = (screen_region_coordinates[1] + screen_region_coordinates[3]) // 2
-        x += self.game.window_geometry["x_offset"]
+        x += self.game._initial_window_region["left"]
 
         y = (screen_region_coordinates[0] + screen_region_coordinates[2]) // 2
-        y += self.game.window_geometry["y_offset"]
+        y += self.game._initial_window_region["top"]
 
         return x, y
 
