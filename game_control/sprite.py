@@ -25,6 +25,7 @@ class Sprite:
         self.name = name
         self.image_data = image_data
         self.image_shape = image_data.shape[:2]
+        self.image_count = image_data.shape[-1]
 
         self.signature_colors = signature_colors or self._generate_signature_colors()
 
@@ -193,6 +194,70 @@ class Sprite:
                         y + constellation[i].shape[0],
                         x + constellation[i].shape[1],
                     )
+
+        if location and region and use_global_location:
+            location = (
+                location[0] + region[0],
+                location[1] + region[1],
+                location[2] + region[0],
+                location[3] + region[1],
+            )
+
+        return location
+
+    @staticmethod
+    def locate_template(
+        sprite=None,
+        frame=None,
+        region=None,
+        use_global_location=True,
+        match_method=cv2.TM_CCORR_NORMED,
+        match_threshold=0.95,
+    ):
+        """
+        Locates the sprite within the defined (roi of) frame.
+
+        Args:
+            sprite (Sprite): The sprite to find.
+            frame (Frame): The frame to search within.
+            region (tuple): Only search within this region of the frame.
+            use_global_location (bool): if using a region, whether to return
+                global location or local to region.
+
+        Returns:
+            Tuple of location of the sprite when found or None otherwise.
+        """
+        img = frame.img
+        if region:
+            img = extract_roi_from_image(img, region)
+
+        if img.shape[0] < sprite.image_shape[0] or img.shape[1] < sprite.image_shape[1]:
+            return None
+
+        best = None
+        for s in range(sprite.image_count):
+            match_result = cv2.matchTemplate(
+                img, sprite.image_data[..., s], match_method
+            )
+            min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(match_result, None)
+            if match_method == cv2.TM_SQDIFF or match_method == cv2.TM_SQDIFF_NORMED:
+                if min_val <= match_threshold:
+                    if best is None or min_val < best[0]:
+                        best = (min_val, min_loc)
+            else:
+                if max_val >= match_threshold:
+                    if best is None or max_val >= best[0]:
+                        best = (max_val, max_loc)
+
+        location = None
+        if best is not None:
+            best_loc = best[1]
+            location = (
+                best_loc[1],
+                best_loc[0],
+                best_loc[1] + sprite.image_shape[0],
+                best_loc[0] + sprite.image_shape[1],
+            )
 
         if location and region and use_global_location:
             location = (
