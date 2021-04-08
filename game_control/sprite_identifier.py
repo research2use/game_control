@@ -1,5 +1,5 @@
 class SpriteIdentifier:
-    def __init__(self, sprites):
+    def __init__(self, sprites={}):
         self.sprites = sprites
 
     def identify(

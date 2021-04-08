@@ -76,7 +76,8 @@ class Game(ABC):
         self._set_window_id()
         self._initialize_window()
 
-        self.sprites = {}
+        self._sprites = {}
+        self._regions = {}
 
     @abstractmethod
     def start(self):
@@ -164,6 +165,14 @@ class Game(ABC):
             self._window_id, self._initial_window_region
         )
 
+    @property
+    def sprites(self):
+        return self._sprites
+
+    @property
+    def regions(self):
+        return self._regions
+
     def is_launched(self):
         """bool: True when game was launched succesully; False otherwise."""
         return self._get_window_id() is not None
@@ -226,7 +235,7 @@ class Game(ABC):
             if frame is not None:
                 if msg is not None:
                     print(msg)
-                location = Sprite.locate(
+                location = Sprite.locate_template(
                     sprite, frame, region, use_global_location=use_global_location
                 )
                 if location is not None:
