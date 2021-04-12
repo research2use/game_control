@@ -202,7 +202,7 @@ class Game(ABC):
         use_global_location=True,
         msg=None,
         seconds_to_try=15,
-        tries_per_second=1,
+        tries_per_second=5,
     ):
         """
         Waits for the sprite to appear within the defined (roi of) frame.
